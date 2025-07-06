@@ -1,0 +1,6 @@
+flask
+qrcode
+pillow
+
+#pip install -r requirements.txt
+#run this^ in the terminal

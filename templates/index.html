@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FORZA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at top left, #2d2d2d, #141414 70%);
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(255, 255, 255, 0.15);
+      --accent: #00bcd4;
+      --accent-hover: #0097a7;
+      --danger: #ff5252;
+      --text: #ffffff;
+      --muted: #bdbdbd;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-gradient);
+      font-family: 'Poppins', sans-serif;
+      color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; padding: 20px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      padding: 28px 22px 32px;
+      max-width: 390px; width: 100%;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 8px; }
+    .subheading {
+      font-size: 0.9rem; color: var(--muted);
+      margin-bottom: 16px;
+    }
+    video {
+      width: 100%; border-radius: 12px; background: #000;
+      border: 2px solid #333; margin-top: 10px;
+    }
+    .indicator {
+      color: var(--danger); font-weight: 600;
+      margin-top: 8px; display: none;
+    }
+    #progress-wrapper {
+      background: #333; border-radius: 4px;
+      height: 8px; margin: 16px 0 12px; overflow: hidden;
+    }
+    #progress-bar {
+      background: var(--accent); height: 100%;
+      width: 0%; transition: width 0.25s linear;
+    }
+    #timer {
+      color: var(--muted); font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+    .buttons {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      justify-content: center; margin-bottom: 12px;
+    }
+    button {
+      flex: 1 1 100px; padding: 10px 0;
+      border: none; border-radius: 8px;
+      background: var(--accent); color: var(--text);
+      font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; transition: background 0.2s ease;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { background: #555; cursor: not-allowed; }
+    .caution {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>FORZA</h1>
+    <div class="subheading">
+      Note: Recordings are limited to 15 seconds and silent (audio is not recorded). Please only upload your final cut.
+    </div>
+    <video id="preview" autoplay muted playsinline></video>
+    <div class="indicator" id="recording-indicator">🔴 Recording…</div>
+    <div id="progress-wrapper"><div id="progress-bar"></div></div>
+    <div id="timer"></div>
+    <div class="buttons">
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop</button>
+      <button id="toggleCam" disabled>Switch Camera</button>
+    </div>
+    <video id="recorded" controls style="display:none; margin-top:18px;"></video>
+    <div class="buttons">
+      <button id="download" disabled>Download to Device</button>
+      <button id="upload"   disabled>Upload to Server</button>
+    </div>
+    <p class="caution">
+      ⚠️ Please allow 5–10 seconds for upload to complete and confirmation to appear.
+    </p>
+  </div>
+  <script>
+    const preview      = document.getElementById('preview');
+    const recorded     = document.getElementById('recorded');
+    const startBtn     = document.getElementById('start');
+    const stopBtn      = document.getElementById('stop');
+    const toggleCamBtn = document.getElementById('toggleCam');
+    const downloadBtn  = document.getElementById('download');
+    const uploadBtn    = document.getElementById('upload');
+    const indicator    = document.getElementById('recording-indicator');
+    const timerTxt     = document.getElementById('timer');
+    const bar          = document.getElementById('progress-bar');
+
+    let stream, recorder, chunks = [], timer, countdown;
+    let isFront = true;
+    let selectedMime;
+
+    async function startPreview() {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const constraints = { video: { facingMode: isFront ? 'user' : 'environment' }, audio: false };
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      preview.srcObject = stream;
+      recorder = new MediaRecorder(stream, { mimeType: selectedMime });
+      chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = onRecordingStop;
+      toggleCamBtn.disabled = false;
+    }
+
+    function onRecordingStop() {
+      const blob = new Blob(chunks, { type: selectedMime });
+      recorded.src = URL.createObjectURL(blob);
+      recorded.style.display = 'block';
+      downloadBtn.disabled = false;
+      uploadBtn.disabled   = false;
+      stopBtn.disabled     = true;
+      indicator.style.display = 'none';
+      bar.style.width = '0%';
+      timerTxt.textContent = '';
+      clearInterval(countdown);
+    }
+
+    async function init() {
+      selectedMime = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')
+        ? 'video/mp4;codecs=avc1' : 'video/webm';
+      await startPreview();
+    }
+
+    function startRecording() {
+      chunks = [];
+      recorded.style.display = 'none';
+      recorder.start();
+      indicator.style.display = 'block';
+      startBtn.disabled     = true;
+      stopBtn.disabled      = false;
+      downloadBtn.disabled  = true;
+      uploadBtn.disabled    = true;
+      toggleCamBtn.disabled = true;
+      let remaining = 15;
+      timerTxt.textContent = `⏱ ${remaining}s left`;
+      bar.style.width = '0%';
+      countdown = setInterval(() => {
+        remaining--;
+        timerTxt.textContent = `⏱ ${remaining}s left`;
+        bar.style.width = `${((15 - remaining) / 15) * 100}%`;
+        if (remaining <= 0) stopRecording();
+      }, 1000);
+      timer = setTimeout(stopRecording, 15000);
+    }
+
+    function stopRecording() {
+      if (recorder && recorder.state === 'recording') {
+        recorder.stop();
+        clearTimeout(timer);
+        clearInterval(countdown);
+        startBtn.disabled = false;
+      }
+    }
+
+    function downloadRecording() {
+      const blob = new Blob(chunks, { type: selectedMime });
+      const ext = selectedMime.includes('mp4') ? 'mp4' : 'webm';
+      const filename = `video_${Date.now()}.${ext}`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+
+    async function uploadRecording() {
+      const blob = new Blob(chunks, { type: selectedMime });
+      const ext  = selectedMime.includes('mp4') ? 'mp4' : 'webm';
+      const filename = `video_${Date.now()}.${ext}`;
+      const form = new FormData();
+      form.append('video', blob, filename);
+      try {
+        const resp = await fetch('/upload', { method: 'POST', body: form });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Status ${resp.status}`);
+        alert(`✅ Uploaded as ${data.filename}`);
+      } catch (err) {
+        console.error("Upload failed:", err);
+        alert(`❌ Upload failed: ${err.message}`);
+      }
+    }
+
+    toggleCamBtn.onclick = () => { isFront = !isFront; startPreview(); };
+    startBtn.onclick    = startRecording;
+    stopBtn.onclick     = stopRecording;
+    downloadBtn.onclick = downloadRecording;
+    uploadBtn.onclick   = uploadRecording;
+    window.onload = init;
+  </script>
+</body>
+</html>
